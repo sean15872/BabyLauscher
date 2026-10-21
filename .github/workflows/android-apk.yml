@@ -1,1 +1,58 @@
+name: BabyLauscher APK bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Projekt herunterladen
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Keine Android-Studio-Installation und kein lokaler Gradle-Wrapper nötig.
+      - name: Gradle 8.9 einrichten
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Android-SDK einrichten
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Android-Plattform installieren
+        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: JavaScript-Signaltest
+        run: node --test tests/signal.test.mjs
+
+      - name: Debug-APK erstellen
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: APK prüfen und benennen
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          mkdir -p zum-installieren
+          cp app/build/outputs/apk/debug/app-debug.apk zum-installieren/BabyLauscher-v0.3.apk
+
+      - name: APK zum Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: BabyLauscher-v0.3-APK
+          path: zum-installieren/BabyLauscher-v0.3.apk
+          if-no-files-found: error
+          retention-days: 30
 
