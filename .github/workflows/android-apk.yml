@@ -1,4 +1,4 @@
-name: BabyLauscher APK bauen
+name: BabyLauscher – Offline-KI APK bauen
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   android-apk:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Projekt herunterladen
         uses: actions/checkout@v4
@@ -22,11 +22,39 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Keine Android-Studio-Installation und kein lokaler Gradle-Wrapper nötig.
       - name: Gradle 8.9 einrichten
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Python 3.11 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: tools/requirements-model.txt
+
+      - name: Modell-Konverter installieren (PyTorch CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r tools/requirements-model.txt
+
+      - name: Vortrainiertes Babylausch-Modell herunterladen und ONNX erzeugen
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_XET: '1'
+        run: python tools/export_distilhubert.py
+
+      - name: KI-Datei vor dem APK-Bau pruefen
+        run: |
+          python - <<'PYMODEL'
+          from pathlib import Path
+          model = Path('app/src/main/assets/model/babycry.onnx')
+          assert model.is_file(), 'KI-Modell fehlt: ' + str(model)
+          assert model.stat().st_size > 1024*1024, 'KI-Modell ist zu klein oder leer'
+          print(f'Modell erzeugt: {model} ({model.stat().st_size / 1024 / 1024:.1f} MiB)')
+          PYMODEL
 
       - name: Android-SDK einrichten
         uses: android-actions/setup-android@v4
@@ -36,23 +64,43 @@ jobs:
       - name: Android-Plattform installieren
         run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
 
-      - name: JavaScript-Signaltest
-        run: node --test tests/signal.test.mjs
+      - name: JavaScript-Signaltests
+        run: node --test tests/*.test.mjs
 
       - name: Debug-APK erstellen
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: APK prüfen und benennen
+      - name: Modellspeicherung IN der APK pruefen und Datei benennen
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          mkdir -p zum-installieren
-          cp app/build/outputs/apk/debug/app-debug.apk zum-installieren/BabyLauscher-v0.3.apk
+          python - <<'PYAPK'
+          import re
+          from pathlib import Path
+          from zipfile import ZipFile
+          gradle = Path('app/build.gradle').read_text(encoding='utf-8')
+          match = re.search(r'versionName\s+[\"\']([^\"\']+)[\"\']', gradle)
+          assert match, 'versionName nicht in app/build.gradle gefunden'
+          version = match.group(1)
+          apk = Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert apk.is_file() and apk.stat().st_size > 1024*1024, 'APK fehlt oder ist zu klein'
+          with ZipFile(apk) as zipped:
+              name = 'assets/model/babycry.onnx'
+              assert name in zipped.namelist(), 'FEHLER: Modell wurde NICHT in die APK gepackt!'
+              model = zipped.getinfo(name)
+              assert model.file_size > 1024*1024, 'FEHLER: KI-Modell in APK zu klein'
+          out = Path('zum-installieren')
+          out.mkdir(exist_ok=True)
+          target = out / f'BabyLauscher_v{version}.apk'
+          target.write_bytes(apk.read_bytes())
+          print(f'OK: {target}, ONNX in APK: {model.file_size / 1024 / 1024:.1f} MiB')
+          with open(Path().home() / 'version.txt', 'w') as f:
+              f.write(version)
+          PYAPK
+          echo "APP_VERSION=$(cat "$HOME/version.txt")" >> "$GITHUB_ENV"
 
-      - name: APK zum Download bereitstellen
+      - name: APK mit richtiger Versionsnummer bereitstellen
         uses: actions/upload-artifact@v4
         with:
-          name: BabyLauscher-v0.3-APK
-          path: zum-installieren/BabyLauscher-v0.3.apk
-          if-no-files-found: error
+          name: BabyLauscher_v${{ env.APP_VERSION }}_APK
+          path: zum-installieren/BabyLauscher_v${{ env.APP_VERSION }}.apk
           retention-days: 30
-
+          if-no-files-found: error
