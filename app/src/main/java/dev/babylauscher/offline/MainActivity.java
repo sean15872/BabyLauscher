@@ -46,7 +46,7 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * BabyLauscher native Aufnahme v0.4.
+ * BabyLauscher native Aufnahme v0.5 mit DistilHuBERT On-Device.
  * Die HTML-App liegt ausschliesslich in den APK-Assets, ohne Internet-Berechtigung.
  * Android AudioRecord ersetzt die auf manchen Telefonen defekte WebView-getUserMedia-Aufnahme.
  * Nur das 8-Sekunden-WAV wird im Arbeitsspeicher an die bestehende lokale Analyse uebergeben.
@@ -89,6 +89,7 @@ public class MainActivity extends Activity {
           }
           window.__babyNativeState = (kind, details) => {
             if (kind === 'recording') {
+              if (window.__babyAiBegin) window.__babyAiBegin();
               active = true; started = performance.now(); stopTimer();
               timer = setInterval(updateClock, 100);
               document.body.classList.add('is-recording');
@@ -383,8 +384,11 @@ public class MainActivity extends Activity {
             if (pcm.size() < sampleRate / 3) throw new IllegalStateException("Aufnahme zu kurz (" + pcm.size() + " Bytes)");
             trace("AudioRecord erfolgreich: " + pcm.size() + " PCM-Bytes, rate=" + sampleRate);
             sendState("processing", "");
-            byte[] wav = encodeWav(pcm.toByteArray(), sampleRate);
+            byte[] rawPcm = pcm.toByteArray();
+            byte[] wav = encodeWav(rawPcm, sampleRate);
             sendWav(wav);
+            // Der Klang wird nie hochgeladen. Die KI laeuft auf demselben Aufnahme-Thread.
+            classifyLocally(rawPcm, sampleRate);
         } catch (Exception ex) {
             trace("Native AudioRecord FEHLER " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
             sendState("error", ex.getClass().getSimpleName() + ": " + ex.getMessage());
@@ -397,6 +401,41 @@ public class MainActivity extends Activity {
             nativeRecording = false;
             trace("Native AudioRecord Ende");
         }
+    }
+
+
+    private void classifyLocally(byte[] pcm, int rate) {
+        try {
+            trace("Offline-KI: Vorverarbeitung startet, rate=" + rate + ", PCM-Bytes=" + pcm.length);
+            CryClassifier.Prediction prediction = CryClassifier.classify(getApplicationContext(), pcm, rate);
+            JSONObject response = new JSONObject();
+            response.put("model", "DistilHuBERT Donate_a_cry");
+            org.json.JSONArray values = new org.json.JSONArray();
+            for (int i = 0; i < prediction.scores.length; i++) {
+                JSONObject item = new JSONObject();
+                item.put("label", CryClassifier.LABELS[i]);
+                item.put("score", prediction.scores[i]);
+                values.put(item);
+            }
+            response.put("scores", values);
+            trace("Offline-KI: Ausgabe erfolgreich (" + prediction.scores.length + " Klassen)");
+            postAiResult(response.toString());
+        } catch (Exception | UnsatisfiedLinkError ex) {
+            trace("Offline-KI FEHLER: " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            try {
+                JSONObject response = new JSONObject();
+                response.put("error", ex.getClass().getSimpleName() + ": " + ex.getMessage());
+                postAiResult(response.toString());
+            } catch (Exception ignored) { }
+        }
+    }
+
+    private void postAiResult(String data) {
+        runOnUiThread(() -> {
+            if (webView != null) webView.evaluateJavascript(
+                    "window.__babyAiReceive && window.__babyAiReceive(" +
+                    JSONObject.quote(data) + ");", null);
+        });
     }
 
     private static void intLE(ByteArrayOutputStream out, int value) {

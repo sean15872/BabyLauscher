@@ -4,3 +4,14 @@
 @media(max-width:730px){.topbar{height:79px}.top-tag{font-size:0;padding:10px 9px}.top-tag .privacy-dot{margin:0}.brand-name{font-size:20px}.brand-note{font-size:9px}.brand-symbol{width:41px;height:41px}.page-shell{padding:0 13px}.hero{padding:28px 25px;min-height:260px}.hero-content{max-width:100%}.hero h1{font-size:35px;max-width:420px;margin:14px 0}.hero p{font-size:12px;max-width:360px}.hero-art{opacity:.18;position:absolute;right:-30px;top:30px;pointer-events:none}.hero-pills{gap:6px}.hero-pills span{font-size:10px;padding:7px}.layout{grid-template-columns:1fr;gap:15px}.main-column,.side-column{gap:15px}.panel{padding:21px}.safety-note{margin:17px 0;padding:17px}.record-actions{flex-wrap:wrap}.record-actions .primary-button{min-width:150px}.record-actions .file-action{flex:1}.side-column{display:grid;grid-template-columns:1fr 1fr;align-items:start}.guide-panel{grid-row:span 2}footer{flex-direction:column}}
 @media(max-width:510px){.hero{padding:23px 20px;min-height:266px}.hero h1{font-size:32px}.panel{padding:20px 17px}.panel h2{font-size:18px}.session-chip{font-size:10px}.record-actions{flex-direction:column}.record-actions .file-action,.record-actions .primary-button{width:100%;flex:1}.cause-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.side-column{display:flex;flex-direction:column}.side-column .panel{width:100%}.metric-grid{grid-template-columns:1fr 1fr}.metric:nth-child(3){grid-column:span 2}.age-line{margin-top:8px}.microphone{width:76px;height:76px}.capture-center{margin:13px auto}.hero-pills span:last-child{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+
+/* Version 0.5: explanatory on-device model panel */
+.ai-card { border: 1px solid #496b7b; border-radius: 18px; background: linear-gradient(135deg, #1a3240, #1d2942); padding: 18px; margin: 16px 0; }
+.ai-card h3 { font-size: 1.15rem; margin: 8px 0; color: #f2f9ff; }
+.ai-card p { font-size: .88rem; line-height: 1.55; margin: 8px 0; color: #c3d2db; }
+.ai-item { display: grid; grid-template-columns: minmax(95px, 1fr) minmax(70px, 2fr) 43px; align-items: center; gap: 10px; padding: 6px 0; font-size: .82rem; }
+.ai-bar { height: 9px; background: #314557; border-radius: 9px; overflow: hidden; }
+.ai-bar > span { display:block; height: 100%; background: #75d5bf; border-radius: 9px; }
+.ai-name { color: #ecf3fb; }
+.ai-pct { color: #adcad8; text-align: right; font-variant-numeric: tabular-nums; }
+.ai-card .ai-footnote { font-size:.72rem; color:#b4c0ca; }

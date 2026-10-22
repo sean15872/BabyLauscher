@@ -1,33 +1,66 @@
-# BabyLauscher – APK mit GitHub Actions bauen (ohne Android Studio)
+# BabyLauscher v0.5 – Offline-KI-Prototyp für Android
 
-Version **v0.3**, für Babys von **0 bis 13 Wochen**. Das **komplette Programm** steckt später in der Android-APK und ist **offline** nutzbar. Diese ZIP-Datei ist das Quellprojekt, noch **keine installierbare APK**.
+**Stand: 21.10.2026 – Implementierung vorbereitet, GitHub-APK-Build und echtes Android-Ergebnis noch NICHT verifiziert.**
 
-## Einmalig einrichten (nur im Webbrowser)
+Diese Entwicklung baut auf der funktionierenden AudioRecord-Version 0.4 auf. Die native Android-Aufnahme bleibt bestehen; hinzu kommt die lokal ausgeführte Klassifikation mit `AmeerHesham/distilhubert-finetuned-baby_cry` (5 Kategorien). Die App funktioniert nach erfolgreichem Bau ohne Internet und enthält weiterhin die ältere Geräuschmerkmalsanalyse und den persönlichen Mustervergleich.
 
-1. GitHub-Konto öffnen oder erstellen: <https://github.com/>.
-2. Auf <https://github.com/new> gehen. Als **Repository name** zum Beispiel `BabyLauscher` eintragen, vorzugsweise **Private** auswählen. Ein leeres Repository ohne README, `.gitignore` oder Lizenz erstellen.
-3. Dieses ZIP **auf dem Computer entpacken**. Danach den **Inhalt** des Ordners `BabyLauscher_GitHub_APK_v0.3` auswählen, **nicht das ZIP selbst**. Der versteckte Unterordner `.github/workflows` muss mit hochgeladen werden.
-4. Auf der neuen Repository-Seite **uploading an existing file** bzw. **Add file → Upload files** wählen. Dateien **und Ordner** aus dem entpackten Projekt per Drag-and-drop hineinziehen.
-5. Darauf achten, dass im Upload `app/build.gradle` und `.github/workflows/android-apk.yml` landen. Unten **Commit changes** klicken.
-6. Zum Reiter **Actions** gehen. Falls GitHub auffordert, Actions erst zu aktivieren, aktivieren. Der Build startet beim ersten Commit auf `main` automatisch. Falls nicht: links **BabyLauscher APK bauen** auswählen → **Run workflow** → grünen Knopf **Run workflow**.
-7. Nach einem **grünen Häkchen** den Workflow-Lauf anklicken. Unten bei **Artifacts** auf `BabyLauscher-v0.3-APK` klicken. Das heruntergeladene ZIP entpacken; darin liegt **`BabyLauscher-v0.3.apk`**.
-8. APK aufs Android-Handy kopieren und über den Dateimanager installieren (gegebenenfalls „Unbekannte Apps installieren“ für den Dateimanager erlauben). Beim ersten Start **Mikrofonberechtigung** erlauben.
+## Wissenschaftliche Grenzen
 
-## Für weitere Versionen
+Das Modell wurde nur mit dem kleinen *Donate_a_cry*-Datensatz trainiert (457 veröffentlichte Beispiele). Dessen Klassifikation erlaubt **keine verlässliche Ursache- oder Schmerzdiagnose**. Die Ausgabe zeigt lediglich die relative Verteilung der fünf erzwungenen Modellkategorien. Hohe Modellscores bedeuten **nicht**, dass z.B. Hunger tatsächlich mit entsprechender Wahrscheinlichkeit vorliegt. Das Ergebnis `Nicht eindeutig` muss möglich bleiben. Bei anhaltend ungewöhnlichem Schreien oder anderen Warnzeichen ärztlich abklären. Die App ersetzt keine Betreuung/Beobachtung.
 
-Bei Quellcode-Updates und erneutem Commit auf `main` erstellt GitHub automatisch eine neue APK. Für einen manuellen Build kannst du jederzeit **Actions → BabyLauscher APK bauen → Run workflow** benutzen. Ein kostenloses GitHub-Konto genügt üblicherweise für gelegentliche Builds; GitHub kann für private Repositories Nutzungsgrenzen haben.
+Quelle Modell (Apache-2.0): https://huggingface.co/AmeerHesham/distilhubert-finetuned-baby_cry
+Trainingsdaten: https://huggingface.co/datasets/Nooon/Donate_a_cry
+ONNX Runtime: https://onnxruntime.ai/docs/install/
 
-**Wichtig wegen Updates:** Dies ist ausdrücklich eine **Debug-APK**. GitHub erstellt auf neuen Runnern möglicherweise bei jedem Build einen **anderen Debug-Signaturschlüssel**. Daher lässt sich eine spätere APK gegebenenfalls nicht über die installierte Version installieren. Ein Deinstallieren würde auch die lokal gespeicherten Lernbeispiele löschen. Bevor du über lange Zeit eigene Lernbeispiele sammelst, sollten wir eine dauerhafte Signierung mit GitHub Secrets sowie Import/Export für die Beispiele ergänzen. Den Signaturschlüssel niemals in ein öffentliches Repository hochladen.
+## Was GitHub Actions baut
 
-## Sicherheit & technische Details
+1. Python 3.11 / PyTorch 2.5.1 / Transformers 4.41.2 installieren.
+2. Offizielles trainiertes `model.safetensors` von Hugging Face beziehen (Revision festgelegt im Skript `tools/export_distilhubert.py`).
+3. Festes ONNX-Modell exportieren, mit Python ONNX Runtime gegen PyTorch prüfen. **Bei Modellfehlern den APK-Build abbrechen, keine Dummy-KI ausliefern.**
+4. Modell in `app/src/main/assets/model/babycry.onnx` ablegen, Android-App mit Gradle bauen.
+5. `BabyLauscher-v0.5-KI.apk` als GitHub Actions Artifact bereitstellen.
 
-- Die App verwendet `RECORD_AUDIO`, **kein `INTERNET`** in AndroidManifest.xml. Die gesamten HTML-/JavaScript-/CSS-Dateien sind in der App eingebettet; auf Android ist keine Webadresse und kein Hosting nötig.
-- Nur lokale achtsekündige Aufnahmen, ohne automatisches Abhören im Hintergrund. Es werden akustische Merkmale, keine Sprachaufnahmen gespeichert.
-- Die fünf Dunstan-Laute sind **nur eine nicht gesicherte Orientierung**. Es gibt hier **kein** medizinisch geprüftes Erkennungsmodell und keine zuverlässige automatische Diagnose von Hunger, Bauchweh oder Müdigkeit. Die App lernt nur den Vergleich bestätigter Beispiele.
-- Bei auffälliger Atmung, Teilnahmslosigkeit, Blaufärbung oder Fieber (38 °C oder höher bei Säuglingen unter 3 Monaten) sofort medizinische Hilfe suchen und nicht auf die App vertrauen.
-- Ein **JavaScript-Signaltest** ist in `.github/workflows/android-apk.yml` vorgesehen. Die Android-Kompilierung und ein echter Gerätetest konnten bei Erstellung dieses ZIPs **nicht durchgeführt** werden.
-- `gradle/actions/setup-gradle` stellt **Gradle 8.9** bereit. Der bisherige nicht-offizielle Wrapper wurde absichtlich entfernt. Die App nutzt Android Gradle Plugin **8.7.3**, API 35, Java 17, minSdk 26.
+**Hinweis:** Der Build kann bei einem neuen Python-Paket, inkompatibler Export-Operation oder fehlender Serververbindung scheitern; Konversion und Laufzeit auf dem Realme waren in dieser Umgebung nicht testbar. Bitte GitHub-Log schicken, falls es zu einem Fehler kommt.
 
-### Falls der Build fehlschlägt
+## Projekt im vorhandenen GitHub-Repository aktualisieren
 
-Unter **Actions** den roten Build-Lauf öffnen und bei `android-apk` auf den fehlgeschlagenen Schritt klicken. Die **Fehlermeldung oder einen Screenshot** schicken, dann kann ich den Workflow anpassen.
+Bestehendes Repository: `https://github.com/sean15872/BabyLauscher`
+
+Am einfachsten das komplette ZIP entpacken, in GitHub `Code > Add file > Upload files` waehlen, den **Inhalt** des entpackten Verzeichnisses (inklusive `.github`, `app`, `tests` und `tools`) per Drag & Drop auf die Upload-Seite ziehen, Pfade beibehalten und `Commit changes` anklicken. Achtung: Nicht die ZIP selbst und nicht den uebergeordneten Verzeichnisnamen hochladen. Dateien mit bestehenden Pfaden werden ersetzt. Anschliessend unter `Actions` den letzten Build oeffnen.
+
+Einzelne geaenderte Dateien (falls Drag & Drop nicht klappt):
+
+- `.github/workflows/android-apk.yml`
+- `app/build.gradle`
+- `app/src/main/java/dev/babylauscher/offline/MainActivity.java`
+- `app/src/main/java/dev/babylauscher/offline/CryClassifier.java` (neu)
+- `app/src/main/assets/web/index.html`
+- `app/src/main/assets/web/style.css`
+- `app/src/main/assets/web/app.mjs`
+- `tools/export_distilhubert.py` (neu)
+- `tools/requirements-model.txt` (neu)
+
+Im Repository alle geaenderten Dateien auf derselben Ebene wie bisher lassen. Den alten `.gitignore`, `tests`, die Icons usw. unveraendert beibehalten.
+
+**Keine Modell-Datei selbst hochladen**: Der neue Workflow exportiert sie direkt beim APK-Build. Groessenordnung Modell ~95 MB, apk entsprechend groesser als die bisherige.
+
+## Android-Installation und Tests
+
+1. Auf GitHub `Actions > BabyLauscher v0.5 Offline-KI APK > letzter gruener Lauf > Artifacts` waehlen.
+2. APK-ZIP herunterladen und entpacken. `BabyLauscher-v0.5-KI.apk` installieren.
+3. Acht Sekunden Babylaute aufnehmen (ohne Hintergrund-TV oder Erwachsenengespräche). Nach dem bestehenden Akustikteil sollte die **KI-Box mit fünf Modellscores** erscheinen. Bei technischen Fehlern `Debug-Log speichern` antippen und die Textdatei senden.
+4. Die Version zeigt **keine KI-Auswertung für den manuellen Dateiimport**: dieser bleibt auf den persönlichen Merkmalsvergleich begrenzt. KI gilt zunaechst nur fuer die native Mikrofonaufnahme.
+
+**Update-Signatur:** GitHub Actions baut eine Debug-APK mit einem möglicherweise jedes Mal neu erzeugten Debug-Zertifikat. Wenn das Überschreiben fehlschlägt, kann eine Deinstallation notwendig sein. **Dadurch gehen die bislang nur lokal gespeicherten Lernbeispiele verloren**. Zukünftig sollte ein stabiler privater Signaturschlüssel als verschlüsseltes GitHub-Secret eingerichtet werden.
+
+## Vorverarbeitung und Lizenz
+
+- Android AudioRecord: Mono-PCM16 mit 16 kHz (bzw. Android-Fallback 44,1 oder 48 kHz).
+- Resampling auf 16 kHz, Mittelwert und Standardabweichung nur der tatsächlichen Samples, danach 10 Sekunden Tensor mit Nullauffuellung.
+- Zweiter Tensor: Attention-Mask mit 1 fuer echte Samples und 0 fuer Padding.
+- Ergebnis: Softmax-Verteilung ueber die fünf Modellklassen. Alle Berechnungen in der APK, ohne Netzwerkberechtigung.
+- Modell: Apache-2.0, Copyright der jeweiligen Modellautor:innen; Modellcode und Lizenz siehe verlinkte Modellseite. ONNX Runtime: MIT-Lizenz. Vor einer oeffentlichen Weitergabe bitte saemtliche Drittlizenzen vollstaendig beilegen.
+
+## Groesse / Performance
+
+Nicht auf einem Realme RMX3370 gemessen. Modell belegt unkomprimiert grob 95 MB und wird beim ersten Start einer KI-Auswertung in einen privaten App-Ordner kopiert. Erste Auswertung kann laenger dauern. Die Java-Ausfuehrung verwendet ONNX Runtime CPU auf ARM64.

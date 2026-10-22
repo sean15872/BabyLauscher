@@ -310,3 +310,51 @@ function initialize() {
   window.addEventListener('babylauscher:pause', () => { if (recording) stopRecording(); });
 }
 initialize();
+
+
+// Offline-KI v0.5: Java's ONNX runtime calls this after native AudioRecord analysis.
+// Scores describe only the model's preference among 5 forced categories. They
+// are NOT medical probabilities; no clinically validated cause detection.
+const AI_LABELS = {
+  belly_pain: 'Bauchweh / Blähungen', burping: 'Aufstoßen',
+  discomfort: 'Unwohlsein', hungry: 'Hunger', tired: 'Müdigkeit'
+};
+function setAiState(title, description) {
+  const card = $('aiCard');
+  if (!card) return;
+  const h = card.querySelector('h3');
+  const p = card.querySelector('p');
+  if (h) h.textContent = title;
+  if (p) p.textContent = description;
+  $('aiScores')?.replaceChildren();
+}
+window.__babyAiBegin = () => {
+  setAiState('KI-Auswertung folgt …', 'Nach Ende der Aufnahme wird das lokale Modell ausgeführt. Das kann auf älteren Handys einige Sekunden dauern.');
+};
+window.__babyAiReceive = payload => {
+  try {
+    const response = JSON.parse(payload);
+    if (response.error) {
+      setAiState('KI momentan nicht verfügbar', `Technisches Problem: ${response.error}. Bitte Debug-Protokoll speichern.`);
+      return;
+    }
+    const rows = response.scores;
+    if (!Array.isArray(rows) || rows.length !== 5 || rows.some(x => !AI_LABELS[x.label] || !Number.isFinite(x.score))) {
+      throw new Error('Unbekannte Ausgabe der KI');
+    }
+    const ranked = [...rows].sort((a,b) => b.score - a.score);
+    const decisive = ranked[0].score >= 0.65 && ranked[0].score - ranked[1].score >= 0.20;
+    setAiState(decisive ? `KI ähnelt: ${AI_LABELS[ranked[0].label]}` : 'KI: Nicht eindeutig',
+      'Das Modell vergleicht nur fünf mögliche Kategorien. Seine Bewertungen sind nicht als Sicherheit über den tatsächlichen Grund des Schreiens zu verstehen.');
+    const host = $('aiScores');
+    for (const item of ranked) {
+      const row = document.createElement('div'); row.className = 'ai-item';
+      const name = document.createElement('span'); name.className = 'ai-name'; name.textContent = AI_LABELS[item.label];
+      const bar = document.createElement('div'); bar.className = 'ai-bar';
+      const fill = document.createElement('span'); fill.style.width = Math.max(0, Math.min(100, item.score * 100)) + '%'; bar.append(fill);
+      const pct = document.createElement('span'); pct.className = 'ai-pct'; pct.textContent = Math.round(item.score * 100) + '%';
+      row.append(name, bar, pct); host.append(row);
+    }
+    if (typeof toast === 'function') toast('Offline-KI-Auswertung abgeschlossen. Ergebnisse sind nur Vermutungen.');
+  } catch (error) { setAiState('KI-Ausgabe nicht lesbar', String(error)); }
+};
